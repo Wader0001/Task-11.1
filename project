@@ -1,0 +1,89 @@
+#include <Wire.h>
+#include <BH1750FVI.h>
+#include <WiFiNINA.h>
+
+const char* ssid = "ssid";
+const char* password = "pw";
+
+
+const char* iftttEvent = "send_email"; 
+const char* iftttKey = "key";
+
+
+BH1750FVI LightSensor(BH1750FVI::k_DevModeContLowRes);
+
+
+const int moistureSensorPin = A0;
+
+
+WiFiClient client;
+
+void setup() {
+  Serial.begin(9600);
+
+ 
+  Wire.begin();
+
+  LightSensor.begin();
+  Serial.println("BH1750FVI initialized.");
+
+
+  Serial.print("Connecting to WiFi...");
+  while (WiFi.begin(ssid, password) != WL_CONNECTED) {
+    delay(1000);
+    Serial.print(".");
+  }
+  Serial.println("Connected to WiFi");
+}
+
+void loop() {
+
+  uint16_t lux = LightSensor.GetLightIntensity();
+
+
+  int moistureValue = analogRead(moistureSensorPin);
+
+
+  Serial.print("Light Intensity (lux): ");
+  Serial.println(lux);
+
+  Serial.print("Soil Moisture Level: ");
+  Serial.println(moistureValue);
+
+
+  if (lux < 50 || moistureValue > 600) {
+ 
+    String payload = "{\"value1\":\"" + String(lux) + "\", \"value2\":\"" + String(moistureValue) + "\"}";
+
+
+    String url = "/trigger/" + String(iftttEvent) + "/with/key/" + String(iftttKey);
+
+    Serial.print("Sending HTTP POST request to: ");
+    Serial.println(url);
+
+    if (client.connect("maker.ifttt.com", 80)) {
+      Serial.println("Connected to IFTTT server");
+      
+      client.println("POST " + url + " HTTP/1.1");
+      client.println("Host: maker.ifttt.com");
+      client.println("Content-Type: application/json");
+      client.print("Content-Length: ");
+      client.println(payload.length());
+      client.println();
+      client.println(payload);
+
+      while (client.connected()) {
+        String line = client.readStringUntil('\n');
+        if (line == "\r") {
+          break;
+        }
+      }
+      Serial.println("HTTP POST request sent");
+      client.stop();
+    } else {
+      Serial.println("Connection to IFTTT server failed");
+    }
+  }
+
+  delay(5000); 
+}
